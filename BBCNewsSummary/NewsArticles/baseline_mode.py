@@ -111,6 +111,7 @@ def input_documents():
         sent_text = nltk.sent_tokenize(lines)
         #to remove stopwords from an array of sentences 
         sent_text = removeStopwords(sent_text)
+        #end
         title_with_first_sentence = sent_text[0].split("\n\n")
         title = title_with_first_sentence[0]
         sent_text[0] = title_with_first_sentence[1]
