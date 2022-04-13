@@ -75,8 +75,21 @@ def process_dirs():
   for category in categories:
     result.append(str(path) + "/" + category)
   return result, categories
-    
 
+def removeStopwords(sentences):
+  stop_words = set(stopwords.words('english'))
+  # print(stop_words)
+  all_sentences = []
+  for sentence in sentences:
+    # print(sentence)
+    #converts sentence to words then removes stop words and puts back into sentence
+    word_tokens = word_tokenize(sentence)
+    filtered_sentence = [w for w in word_tokens if not w.lower() in stop_words]
+    sentence = " ".join(filtered_sentence)
+    # print(sentence)
+    all_sentences.append(sentence)
+  return all_sentences
+    
 # read in the document
 def input_documents():
   category_paths, categories = process_dirs()
@@ -96,6 +109,8 @@ def input_documents():
       with open(path, 'r') as file:
         lines = file.read()
         sent_text = nltk.sent_tokenize(lines)
+        #to remove stopwords from an array of sentences 
+        sent_text = removeStopwords(sent_text)
         title_with_first_sentence = sent_text[0].split("\n\n")
         title = title_with_first_sentence[0]
         sent_text[0] = title_with_first_sentence[1]
