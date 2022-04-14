@@ -1,5 +1,6 @@
 #@title Load the Universal Sentence Encoder's TF Hub module
 from __future__ import print_function
+from ftplib import all_errors
 from lib2to3.pgen2 import tokenize
 from absl import logging
 import tensorflow as tf
@@ -12,7 +13,10 @@ import re
 import pathlib
 import seaborn as sns
 import nltk
+from nltk.corpus import stopwords
+import string
 
+nltk.download('stopwords')
 module_url = "https://tfhub.dev/google/universal-sentence-encoder/4" #@param ["https://tfhub.dev/google/universal-sentence-encoder/4", "https://tfhub.dev/google/universal-sentence-encoder-large/5"]
 model = hub.load(module_url)
 print ("module %s loaded" % module_url)
@@ -81,12 +85,10 @@ def removeStopwords(sentences):
   # print(stop_words)
   all_sentences = []
   for sentence in sentences:
-    # print(sentence)
     #converts sentence to words then removes stop words and puts back into sentence
-    word_tokens = word_tokenize(sentence)
-    filtered_sentence = [w for w in word_tokens if not w.lower() in stop_words]
+    word_tokens = nltk.word_tokenize(sentence)
+    filtered_sentence = [w for w in word_tokens if (not w.lower() in stop_words) and (w.isalnum() or re.match("^\w+-\w+", w))]
     sentence = " ".join(filtered_sentence)
-    # print(sentence)
     all_sentences.append(sentence)
   return all_sentences
     
@@ -106,19 +108,25 @@ def input_documents():
     for news_article in news_article_name_inorder:
       path = category_paths[i] + "/" + news_article
       # print(path)
-      with open(path, 'r') as file:
+      with open(path, 'r', errors='ignore') as file:
+        # try:
         lines = file.read()
+        # except UnicodeDecodeError:
+        #   print("unicode " + path)
         sent_text = nltk.sent_tokenize(lines)
         #to remove stopwords from an array of sentences 
         sent_text = removeStopwords(sent_text)
         #end
-        title_with_first_sentence = sent_text[0].split("\n\n")
-        title = title_with_first_sentence[0]
-        sent_text[0] = title_with_first_sentence[1]
+        if ("\n\n" in sent_text[0]):
+          title_with_first_sentence = sent_text[0].split("\n\n")
+          title = title_with_first_sentence[0]
+        else:
+          title = sent_text[0]
         sentences = sent_text
         # create News object using current news article
         news = News(categories[i], title, sentences)
         news_of_one_category.append(news)
+        print(news)
     category_news[categories[i]] = news_of_one_category
   return category_news
   
