@@ -14,7 +14,6 @@ import pathlib
 import seaborn as sns
 import nltk
 from nltk.corpus import stopwords
-import string
 
 nltk.download('stopwords')
 module_url = "https://tfhub.dev/google/universal-sentence-encoder/4" #@param ["https://tfhub.dev/google/universal-sentence-encoder/4", "https://tfhub.dev/google/universal-sentence-encoder-large/5"]
@@ -26,6 +25,7 @@ class Sentences:
             self.id = id
             self.content = content
             self.sentence_embedding = sentence_embedding
+            self.inner_product_title = None
 
       # print instance for debugging purpose
       def __repr__(self):
@@ -46,29 +46,34 @@ class News:
           self.content.append(self.title)
         else:
           self.content.append(Sentences(sentences[i-1], i, embedding))
-  
-  # print instance for debugging purpose
-  def __repr__(self):
-        return "category: {} title: {} sentences: {} sentence_embedding: {}".format(self.category, self.title, self.sentences, self.content)
-  
+    self.run_title_method()
 
+  def run_title_method(self):
+    # calcluate the similarity of title to itself for later normalization
+    title_self_similarity = np.inner(self.title.sentence_embedding, self.title.sentence_embedding)
+    for sentence in self.content:
+      # calculate the similarity of title and each sentence
+      sentence.inner_product_title = np.inner(self.title.sentence_embedding, sentence.sentence_embedding)
+      # normalize to the range of 0-1
+      sentence.inner_product_title = sentence.inner_product_title/title_self_similarity
+  
   def populate_sentence_embedding(title, sentences):
     temp = [title]+sentences
     # sentence embedding for each sentence in the article including the title
-    sentences_embedding = News.calculate_sentence_embedding(temp)
+    sentences_embedding = calculate_sentence_embedding(temp)
     return sentences_embedding
-    
 
-  @staticmethod
-  def embed(input):
-    return model(input)
+  # print instance for debugging purpose
+  def __repr__(self):
+        return "category: {} title: {} sentences: {} sentence_embedding: {}".format(self.category, self.title, self.sentences, self.content)
 
-  @staticmethod
-  def calculate_sentence_embedding(contents):
-    logging.set_verbosity(logging.ERROR)
-    message_embeddings = News.embed(contents)
-    return np.array(message_embeddings).tolist()
+def embed(input):
+  return model(input) 
 
+def calculate_sentence_embedding(contents):
+  logging.set_verbosity(logging.ERROR)
+  message_embeddings = embed(contents)
+  return np.array(message_embeddings).tolist()
 
 # get all the full path for all the category
 def process_dirs():
@@ -82,7 +87,6 @@ def process_dirs():
 
 def removeStopwords(sentences):
   stop_words = set(stopwords.words('english'))
-  # print(stop_words)
   all_sentences = []
   for sentence in sentences:
     #converts sentence to words then removes stop words and puts back into sentence
@@ -91,7 +95,16 @@ def removeStopwords(sentences):
     sentence = " ".join(filtered_sentence)
     all_sentences.append(sentence)
   return all_sentences
-    
+
+
+def removeStopwordsTitle(sentence):
+  stop_words = set(stopwords.words('english'))
+  #converts sentence to words then removes stop words and puts back into sentence
+  word_tokens = nltk.word_tokenize(sentence)
+  filtered_sentence = [w for w in word_tokens if (not w.lower() in stop_words) and (w.isalnum() or re.match("^\w+-\w+", w))]
+  sentence = " ".join(filtered_sentence)
+  return sentence
+
 # read in the document
 def input_documents():
   category_paths, categories = process_dirs()
@@ -111,22 +124,25 @@ def input_documents():
       with open(path, 'r', errors='ignore') as file:
         # try:
         lines = file.read()
-        # except UnicodeDecodeError:
-        #   print("unicode " + path)
         sent_text = nltk.sent_tokenize(lines)
+
+        if ("\n\n" in sent_text[0]):
+          title_with_first_sentence = sent_text[0].split("\n\n")
+          # remove the stop words in the title
+          title = removeStopwordsTitle(title_with_first_sentence[0])
+          # make sure sent_text only contains text sentences (no title)
+          sent_text[0] = title_with_first_sentence[1]
+        else:
+          title = removeStopwordsTitle(sent_text[0])
+          # make sure sent_text only contains text sentences (no title)
+          sent_text.pop(0)
         #to remove stopwords from an array of sentences 
         sent_text = removeStopwords(sent_text)
         #end
-        if ("\n\n" in sent_text[0]):
-          title_with_first_sentence = sent_text[0].split("\n\n")
-          title = title_with_first_sentence[0]
-        else:
-          title = sent_text[0]
         sentences = sent_text
         # create News object using current news article
         news = News(categories[i], title, sentences)
         news_of_one_category.append(news)
-        print(news)
     category_news[categories[i]] = news_of_one_category
   return category_news
   
@@ -134,9 +150,6 @@ def main():
   input_documents()
 
 main()
-      
-
-
 
 # # this is for plotting similarity between sentences (eg: title and sentences, sentences and sentences) to be used in the paper
 # def plot_similarity(labels, features, rotation):
