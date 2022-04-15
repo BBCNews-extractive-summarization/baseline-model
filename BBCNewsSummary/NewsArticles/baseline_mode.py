@@ -63,6 +63,22 @@ class News:
     sentences_embedding = calculate_sentence_embedding(temp)
     return sentences_embedding
 
+#  def location_method(self):
+#    sentences = self.sentences
+#    #initialize score of 0 for title
+#    totalScore = [0]
+#    for i in range(1,len(sentences)):
+#      i = sentences[i].id
+#      j = i
+#      score = (1/i) * (.8* (1/j)) * .2
+#      totalScore.append(score)
+#    return totalScore
+    
+  # score(Si) = 1/i * 0.8+ 1/j * 0.2
+  #(i = the position the sentence is in the article,
+  #j = the position the sentence is in the paragraph)
+  #compute the score for each sentence except for the title
+
   # print instance for debugging purpose
   def __repr__(self):
         return "category: {} title: {} sentences: {} sentence_embedding: {}".format(self.category, self.title, self.sentences, self.content)
