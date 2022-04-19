@@ -14,6 +14,7 @@ import pathlib
 import seaborn as sns
 import nltk
 from nltk.corpus import stopwords
+nltk.download('punkt')
 
 nltk.download('stopwords')
 module_url = "https://tfhub.dev/google/universal-sentence-encoder/4" #@param ["https://tfhub.dev/google/universal-sentence-encoder/4", "https://tfhub.dev/google/universal-sentence-encoder-large/5"]
@@ -21,10 +22,11 @@ model = hub.load(module_url)
 print ("module %s loaded" % module_url)
 
 class Sentences:
-      def __init__(self, content, id, sentence_embedding):
+      def __init__(self, content, id, sentence_embedding, para_order):
             self.id = id
             self.content = content
             self.sentence_embedding = sentence_embedding
+            self.para_order = para_order
             self.inner_product_title = None
 
       # print instance for debugging purpose
@@ -34,18 +36,19 @@ class Sentences:
 
 
 class News:
-  def __init__(self, category = None, title = None, sentences = None):
+  def __init__(self, category = None, title = None, sentences = None, para_order = None):
     self.category = category
     self.sentences = sentences
+    self.para_order = para_order
     # sentences, index corresponding to sentence id. eg: title has index 0, id 0
     self.content = []
     sentences_embedding = News.populate_sentence_embedding(title, sentences)
     for i, embedding in enumerate(sentences_embedding):
         if (i == 0):
-          self.title = Sentences(title, i, embedding)
+          self.title = Sentences(title, i, embedding, 1)
           self.content.append(self.title)
         else:
-          self.content.append(Sentences(sentences[i-1], i, embedding))
+          self.content.append(Sentences(sentences[i-1], i, embedding, para_order[i]))
     self.run_title_method()
 
   def run_title_method(self):
@@ -63,21 +66,16 @@ class News:
     sentences_embedding = calculate_sentence_embedding(temp)
     return sentences_embedding
 
-#  def location_method(self):
-#    sentences = self.sentences
-#    #initialize score of 0 for title
-#    totalScore = [0]
-#    for i in range(1,len(sentences)):
-#      i = sentences[i].id
-#      j = i
-#      score = (1/i) * (.8* (1/j)) * .2
-#      totalScore.append(score)
-#    return totalScore
-    
-  # score(Si) = 1/i * 0.8+ 1/j * 0.2
-  #(i = the position the sentence is in the article,
-  #j = the position the sentence is in the paragraph)
-  #compute the score for each sentence except for the title
+  def location_method(self):
+    sentences = self.content
+    #initialize score of 1 for title
+    totalScores = [1]
+    for i in range(1,len(sentences)):
+      i = sentences[i].id
+      j = sentences[i].para_order
+      score = (1/i) * (.8* (1/j)) * .2
+      totalScores.append(score)
+    return totalScores
 
   # print instance for debugging purpose
   def __repr__(self):
@@ -121,6 +119,15 @@ def removeStopwordsTitle(sentence):
   sentence = " ".join(filtered_sentence)
   return sentence
 
+def paraOrder(sentences):
+  orders = []
+  paras = sentences.split('\n\n')
+  for p in paras:
+    sent = nltk.sent_tokenize(p)
+    for i in range(len(sent)):
+      orders.append(i+1)
+  return orders
+
 # read in the document
 def input_documents():
   category_paths, categories = process_dirs()
@@ -140,6 +147,7 @@ def input_documents():
       with open(path, 'r', errors='ignore') as file:
         # try:
         lines = file.read()
+        para_order = paraOrder(lines)
         sent_text = nltk.sent_tokenize(lines)
 
         if ("\n\n" in sent_text[0]):
@@ -157,7 +165,8 @@ def input_documents():
         #end
         sentences = sent_text
         # create News object using current news article
-        news = News(categories[i], title, sentences)
+        news = News(categories[i], title, sentences,para_order)
+        # print(news.location_method())
         news_of_one_category.append(news)
     category_news[categories[i]] = news_of_one_category
   return category_news
