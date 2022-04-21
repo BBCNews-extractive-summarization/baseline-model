@@ -13,11 +13,17 @@ import re
 import pathlib
 import seaborn as sns
 import nltk
+from sklearn.cluster import KMeans
 from nltk.corpus import stopwords
-nltk.download('punkt')
+from nltk.stem import WordNetLemmatizer
+# nltk.download('punkt')
+# nltk.download('stopwords')
+# nltk.download('wordnet')
 
-nltk.download('stopwords')
-module_url = "https://tfhub.dev/google/universal-sentence-encoder/4" #@param ["https://tfhub.dev/google/universal-sentence-encoder/4", "https://tfhub.dev/google/universal-sentence-encoder-large/5"]
+# Create WordNetLemmatizer object
+wnl = WordNetLemmatizer()
+# module_url = "https://tfhub.dev/google/universal-sentence-encoder/4" #@param ["https://tfhub.dev/google/universal-sentence-encoder/4", "https://tfhub.dev/google/universal-sentence-encoder-large/5"]
+module_url = "https://tfhub.dev/google/universal-sentence-encoder-large/5"
 model = hub.load(module_url)
 print ("module %s loaded" % module_url)
 
@@ -26,8 +32,19 @@ class Sentences:
             self.id = id
             self.content = content
             self.sentence_embedding = sentence_embedding
+
+            # the location of the sentence in the article
             self.para_order = para_order
-            self.inner_product_title = None
+
+            #sentence scores subpart
+            self.title_method_score = None
+            self.location_method_score = None
+            self.sentence_length_score = None
+            self.numerical_token_score = None
+            self.reduce_frequency_score = None
+
+            #sentence score/weight
+            self.sentence_score = None
 
       # print instance for debugging purpose
       def __repr__(self):
@@ -42,6 +59,7 @@ class News:
     self.para_order = para_order
     # sentences, index corresponding to sentence id. eg: title has index 0, id 0
     self.content = []
+    # get the sentence embedding for every sentence in the article
     sentences_embedding = News.populate_sentence_embedding(title, sentences)
     for i, embedding in enumerate(sentences_embedding):
         if (i == 0):
@@ -49,9 +67,45 @@ class News:
           self.content.append(self.title)
         else:
           self.content.append(Sentences(sentences[i-1], i, embedding, para_order[i]))
-    self.run_title_method()
+    # caluclate the sub-part and sum of sentence score
+    self.title_method()
+    self.location_method()
+    self.get_sentence_length_score()
+    self.get_numerical_token_score()
+    self.populate_sentence_score()
 
-  def run_title_method(self):
+  def get_numerical_token_score(self):
+    for sentence in self.content:
+        words_in_sentence = sentence.content.split(" ")
+        num_numerical_token = len(list(filter(lambda x:x.isdigit(), words_in_sentence)))
+        sentence.numerical_token_score = num_numerical_token/len(words_in_sentence)
+
+  def reduce_frequency(num_cluster, X):
+    kmeans = KMeans(n_clusters=num_cluster, random_state=0).fit_predict(X)
+
+  def get_keyword_frequency_score(self):
+    pass
+
+  def get_proper_noun_score(self):
+    nltk.pos_tag(nltk.word_tokenize(self.sentence.content))
+    pass
+
+  def get_sentence_length_score(self):
+    # find the longest sentence
+    max_length = max([len(sentence.content.split(" ")) for sentence in self.content])
+    for i in range(len(self.content)):
+        if (i == 0):
+            # title is set to 1
+            self.content[i].sentence_length_score = 1
+            break
+        self.content[i].sentence_length_score = len(self.content[i].content.split(" "))/max_length
+    
+     
+  def populate_sentence_score(self):
+    for sentence in self.content:
+        sentence.sentence_score = sentence.location_method_score * 0.3 + sentence.title_method_score * 0.6 + sentence.sentence_length_score*0.05 + sentence.numerical_token_score*0.05
+
+  def title_method(self):
     # calcluate the similarity of title to itself for later normalization
     title_self_similarity = np.inner(self.title.sentence_embedding, self.title.sentence_embedding)
     for sentence in self.content:
@@ -70,10 +124,12 @@ class News:
     sentences = self.content
     #initialize score of 1 for title
     totalScores = [1]
+    sentences[0].location_method_score = 1
     for i in range(1,len(sentences)):
       i = sentences[i].id
       j = sentences[i].para_order
       score = (1/i) * (.8* (1/j)) * .2
+      sentences[i].location_method_score = score
       totalScores.append(score)
     return totalScores
 
@@ -105,7 +161,7 @@ def removeStopwords(sentences):
   for sentence in sentences:
     #converts sentence to words then removes stop words and puts back into sentence
     word_tokens = nltk.word_tokenize(sentence)
-    filtered_sentence = [w for w in word_tokens if (not w.lower() in stop_words) and (w.isalnum() or re.match("^\w+-\w+", w))]
+    filtered_sentence = [wnl.lemmatize(w) for w in word_tokens if (not w.lower() in stop_words) and (w.isalnum() or re.match("^\w+-\w+", w))]
     sentence = " ".join(filtered_sentence)
     all_sentences.append(sentence)
   return all_sentences
@@ -115,7 +171,7 @@ def removeStopwordsTitle(sentence):
   stop_words = set(stopwords.words('english'))
   #converts sentence to words then removes stop words and puts back into sentence
   word_tokens = nltk.word_tokenize(sentence)
-  filtered_sentence = [w for w in word_tokens if (not w.lower() in stop_words) and (w.isalnum() or re.match("^\w+-\w+", w))]
+  filtered_sentence = [wnl.lemmatize(w) for w in word_tokens if (not w.lower() in stop_words) and (w.isalnum() or re.match("^\w+-\w+", w))]
   sentence = " ".join(filtered_sentence)
   return sentence
 
@@ -168,6 +224,9 @@ def input_documents():
         news = News(categories[i], title, sentences,para_order)
         # print(news.location_method())
         news_of_one_category.append(news)
+        # print(news)
+        break
+    break
     category_news[categories[i]] = news_of_one_category
   return category_news
   
