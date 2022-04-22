@@ -246,11 +246,7 @@ def input_documents():
         sentences = sent_text
         # create News object using current news article
         news = News(categories[i], title, sentences,para_order)
-        # print(news.location_method())
         news_of_one_category.append(news)
-        # print(news)
-        break
-    break
     category_news[categories[i]] = news_of_one_category
   return category_news
   
