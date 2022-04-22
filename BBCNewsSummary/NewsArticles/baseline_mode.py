@@ -16,9 +16,10 @@ import nltk
 from sklearn.cluster import KMeans
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-# nltk.download('punkt')
-# nltk.download('stopwords')
-# nltk.download('wordnet')
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
+nltk.download('averaged_perceptron_tagger')
 
 # Create WordNetLemmatizer object
 wnl = WordNetLemmatizer()
@@ -41,6 +42,9 @@ class Sentences:
             self.location_method_score = None
             self.sentence_length_score = None
             self.numerical_token_score = None
+            self.proper_noun_score = None
+            self.similarity_centroid = None
+            self.keyword_frequency = None
             self.reduce_frequency_score = None
 
             #sentence score/weight
@@ -49,7 +53,7 @@ class Sentences:
       # print instance for debugging purpose
       def __repr__(self):
             # !!! for now just show the first three sentence embedding for the purpose of reduce the computing power used
-            return "id: {} content: {} sentence_embedding: {}".format(self.id, self.content, self.sentence_embedding[:3])
+            return "id: {} content: {} sentence_embedding: {}".format(self.id, self.content, self.sentence_embedding[:3]) + "\ntitle: {}, location:{}, sentence length:{}, numerical_token:{}, proper_noun:{}, similarity_centroid:{}, keyword_frequency:{}, sentence score:{}".format(self.title_method_score, self.title_method_score, self.sentence_length_score, self.numerical_token_score, self.proper_noun_score, self.similarity_centroid, self.keyword_frequency, self.sentence_score)
 
 
 class News:
@@ -72,6 +76,7 @@ class News:
     self.location_method()
     self.get_sentence_length_score()
     self.get_numerical_token_score()
+    self.get_proper_noun_score()
     self.populate_sentence_score()
 
   def get_numerical_token_score(self):
@@ -80,31 +85,50 @@ class News:
         num_numerical_token = len(list(filter(lambda x:x.isdigit(), words_in_sentence)))
         sentence.numerical_token_score = num_numerical_token/len(words_in_sentence)
 
-  def reduce_frequency(num_cluster, X):
-    kmeans = KMeans(n_clusters=num_cluster, random_state=0).fit_predict(X)
+  # def reduce_frequency(num_cluster, X):
+  #   kmeans = KMeans(n_clusters=num_cluster, random_state=0).fit_predict(X)
+
+  def get_similarity_centroid_score(self):
+    pass
 
   def get_keyword_frequency_score(self):
     pass
 
+# Andy is a good Chinese Wow Boy.
+
   def get_proper_noun_score(self):
-    nltk.pos_tag(nltk.word_tokenize(self.sentence.content))
-    pass
+    for sentence in self.content:
+      tagged_sentence = nltk.pos_tag(nltk.word_tokenize(sentence.content))
+      propernouns = []
+      prev_tag_NNP = False
+      for word,pos_tag in tagged_sentence:
+        if pos_tag == 'NNP' and not prev_tag_NNP:
+          propernouns.append(word)
+          prev_tag_NNP = True
+        elif pos_tag == 'NNP' and prev_tag_NNP:
+          propernouns[-1] += word
+        else:
+          prev_tag_NNP = False
+      sentence.proper_noun_score = len(propernouns)/len(sentence.content.split(" "))
 
   def get_sentence_length_score(self):
     # find the longest sentence
     max_length = max([len(sentence.content.split(" ")) for sentence in self.content])
     for i in range(len(self.content)):
         if (i == 0):
-            # title is set to 1
-            self.content[i].sentence_length_score = 1
-            break
-        self.content[i].sentence_length_score = len(self.content[i].content.split(" "))/max_length
+          # title is set to 1
+          self.content[i].sentence_length_score = 1
+        else:
+          self.content[i].sentence_length_score = len(self.content[i].content.split(" "))/max_length
     
      
   def populate_sentence_score(self):
     for sentence in self.content:
-        sentence.sentence_score = sentence.location_method_score * 0.3 + sentence.title_method_score * 0.6 + sentence.sentence_length_score*0.05 + sentence.numerical_token_score*0.05
-
+        try:
+          sentence.sentence_score = sentence.location_method_score * 0.3 + sentence.title_method_score * 0.5 + sentence.sentence_length_score * 0.05 + sentence.numerical_token_score * 0.05 + sentence.proper_noun_score * 0.1
+        except TypeError:
+          print(sentence)
+        
   def title_method(self):
     # calcluate the similarity of title to itself for later normalization
     title_self_similarity = np.inner(self.title.sentence_embedding, self.title.sentence_embedding)
@@ -112,7 +136,7 @@ class News:
       # calculate the similarity of title and each sentence
       sentence.inner_product_title = np.inner(self.title.sentence_embedding, sentence.sentence_embedding)
       # normalize to the range of 0-1
-      sentence.inner_product_title = sentence.inner_product_title/title_self_similarity
+      sentence.title_method_score = sentence.inner_product_title/title_self_similarity
   
   def populate_sentence_embedding(title, sentences):
     temp = [title]+sentences
