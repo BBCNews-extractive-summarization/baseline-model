@@ -5,6 +5,7 @@ from lib2to3.pgen2 import tokenize
 from absl import logging
 import tensorflow as tf
 import tensorflow_hub as hub
+from collections import Counter
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -16,9 +17,10 @@ import nltk
 from sklearn.cluster import KMeans
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-# nltk.download('punkt')
-# nltk.download('stopwords')
-# nltk.download('wordnet')
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
+nltk.download('averaged_perceptron_tagger')
 
 # Create WordNetLemmatizer object
 wnl = WordNetLemmatizer()
@@ -41,6 +43,9 @@ class Sentences:
             self.location_method_score = None
             self.sentence_length_score = None
             self.numerical_token_score = None
+            self.proper_noun_score = None
+            self.similarity_centroid = None
+            self.keyword_frequency = None
             self.reduce_frequency_score = None
 
             #sentence score/weight
@@ -49,7 +54,7 @@ class Sentences:
       # print instance for debugging purpose
       def __repr__(self):
             # !!! for now just show the first three sentence embedding for the purpose of reduce the computing power used
-            return "id: {} content: {} sentence_embedding: {}".format(self.id, self.content, self.sentence_embedding[:3])
+            return "id: {} content: {} sentence_embedding: {}".format(self.id, self.content, self.sentence_embedding[:3]) + "\ntitle: {}, location:{}, sentence length:{}, numerical_token:{}, proper_noun:{}, similarity_centroid:{}, keyword_frequency:{}, kmeans:{}, sentence score:{}".format(self.title_method_score, self.title_method_score, self.sentence_length_score, self.numerical_token_score, self.proper_noun_score, self.similarity_centroid, self.keyword_frequency, self.reduce_frequency_score ,self.sentence_score)
 
 
 class News:
@@ -72,6 +77,8 @@ class News:
     self.location_method()
     self.get_sentence_length_score()
     self.get_numerical_token_score()
+    self.get_proper_noun_score()
+    self.reduce_frequency_helper(sentences_embedding)
     self.populate_sentence_score()
 
   def get_numerical_token_score(self):
@@ -80,31 +87,67 @@ class News:
         num_numerical_token = len(list(filter(lambda x:x.isdigit(), words_in_sentence)))
         sentence.numerical_token_score = num_numerical_token/len(words_in_sentence)
 
-  def reduce_frequency(num_cluster, X):
-    kmeans = KMeans(n_clusters=num_cluster, random_state=0).fit_predict(X)
+
+  def reduce_frequency_helper(self, sentences_embedding):
+    # k to be decided
+    k = int(0.4 * (len(self.content)-1))
+    # get all the sentence embedding except for the title in the news article
+    X = sentences_embedding[1:]
+    labels = News.get_reduce_frequency_score(k, X)
+    freq_count = Counter(labels)
+    for i in range(len(self.content)):
+      if i == 0:
+        self.content[i].reduce_frequency_score = 1
+      else:
+        self.content[i].reduce_frequency_score = freq_count[labels[i-1]]/len(labels)
+      print(self.content[i])
+
+  
+  def get_reduce_frequency_score(num_cluster, X):
+    kmeans = KMeans(n_clusters=num_cluster, random_state=0).fit(X)
+    return kmeans.labels_
+
+  def get_similarity_centroid_score(self):
+    pass
 
   def get_keyword_frequency_score(self):
     pass
 
+# Andy is a good Chinese Wow Boy.
+
   def get_proper_noun_score(self):
-    nltk.pos_tag(nltk.word_tokenize(self.sentence.content))
-    pass
+    for sentence in self.content:
+      tagged_sentence = nltk.pos_tag(nltk.word_tokenize(sentence.content))
+      propernouns = []
+      prev_tag_NNP = False
+      for word,pos_tag in tagged_sentence:
+        if pos_tag == 'NNP' and not prev_tag_NNP:
+          propernouns.append(word)
+          prev_tag_NNP = True
+        elif pos_tag == 'NNP' and prev_tag_NNP:
+          propernouns[-1] += word
+        else:
+          prev_tag_NNP = False
+      sentence.proper_noun_score = len(propernouns)/len(sentence.content.split(" "))
 
   def get_sentence_length_score(self):
     # find the longest sentence
     max_length = max([len(sentence.content.split(" ")) for sentence in self.content])
     for i in range(len(self.content)):
         if (i == 0):
-            # title is set to 1
-            self.content[i].sentence_length_score = 1
-            break
-        self.content[i].sentence_length_score = len(self.content[i].content.split(" "))/max_length
+          # title is set to 1
+          self.content[i].sentence_length_score = 1
+        else:
+          self.content[i].sentence_length_score = len(self.content[i].content.split(" "))/max_length
     
      
   def populate_sentence_score(self):
     for sentence in self.content:
-        sentence.sentence_score = sentence.location_method_score * 0.3 + sentence.title_method_score * 0.6 + sentence.sentence_length_score*0.05 + sentence.numerical_token_score*0.05
-
+        try:
+          sentence.sentence_score = sentence.location_method_score * 0.3 + sentence.title_method_score * 0.5 + sentence.sentence_length_score * 0.05 + sentence.numerical_token_score * 0.05 + sentence.proper_noun_score * 0.1
+        except TypeError:
+          print(sentence)
+        
   def title_method(self):
     # calcluate the similarity of title to itself for later normalization
     title_self_similarity = np.inner(self.title.sentence_embedding, self.title.sentence_embedding)
@@ -112,7 +155,7 @@ class News:
       # calculate the similarity of title and each sentence
       sentence.inner_product_title = np.inner(self.title.sentence_embedding, sentence.sentence_embedding)
       # normalize to the range of 0-1
-      sentence.inner_product_title = sentence.inner_product_title/title_self_similarity
+      sentence.title_method_score = sentence.inner_product_title/title_self_similarity
   
   def populate_sentence_embedding(title, sentences):
     temp = [title]+sentences
@@ -225,8 +268,6 @@ def input_documents():
         # print(news.location_method())
         news_of_one_category.append(news)
         # print(news)
-        break
-    break
     category_news[categories[i]] = news_of_one_category
   return category_news
   
@@ -234,98 +275,3 @@ def main():
   input_documents()
 
 main()
-
-# # this is for plotting similarity between sentences (eg: title and sentences, sentences and sentences) to be used in the paper
-# def plot_similarity(labels, features, rotation):
-#   corr = np.inner(features, features)
-#   sns.set(font_scale=1.2)
-#   g = sns.heatmap(
-#       corr,
-#       xticklabels=labels,
-#       yticklabels=labels,
-#       vmin=0,
-#       vmax=1,
-#       cmap="YlOrRd")
-#   g.set_xticklabels(labels, rotation=rotation)
-#   g.set_title("Semantic Textual Similarity")
-
-# def run_and_plot(messages_):
-#   message_embeddings_ = embed(messages_)
-#   plot_similarity(messages_, message_embeddings_, 90)
-
-# messages = [
-#     # Smartphones
-#     "I like my phone",
-#     "My phone is not good.",
-#     "Your cellphone looks great.",
-
-#     # Weather
-#     "Will it snow tomorrow?",
-#     "Recently a lot of hurricanes have hit the US",
-#     "Global warming is real",
-
-#     # Food and health
-#     "An apple a day, keeps the doctors away",
-#     "Eating strawberries is healthy",
-#     "Is paleo better than keto?",
-
-#     # Asking about age
-#     "How old are you?",
-#     "what is your age?",
-# ]
-
-# run_and_plot(messages)
-               
-
-
-
-
-# # this part is to get the similarity between sentence embedding scores
-# import pandas
-# import scipy
-# import math
-# import csv
-
-# sts_dataset = tf.keras.utils.get_file(
-#     fname="Stsbenchmark.tar.gz",
-#     origin="http://ixa2.si.ehu.es/stswiki/images/4/48/Stsbenchmark.tar.gz",
-#     extract=True)
-# sts_dev = pandas.read_table(
-#     os.path.join(os.path.dirname(sts_dataset), "stsbenchmark", "sts-dev.csv"),
-#     error_bad_lines=False,
-#     skip_blank_lines=True,
-#     usecols=[4, 5, 6],
-#     names=["sim", "sent_1", "sent_2"])
-# sts_test = pandas.read_table(
-#     os.path.join(
-#         os.path.dirname(sts_dataset), "stsbenchmark", "sts-test.csv"),
-#     error_bad_lines=False,
-#     quoting=csv.QUOTE_NONE,
-#     skip_blank_lines=True,
-#     usecols=[4, 5, 6],
-#     names=["sim", "sent_1", "sent_2"])
-# # cleanup some NaN values in sts_dev
-# sts_dev = sts_dev[[isinstance(s, str) for s in sts_dev['sent_2']]]
-
-
-
-
-# sts_data = sts_dev
-
-# def run_sts_benchmark(batch):
-#   sts_encode1 = tf.nn.l2_normalize(embed(tf.constant(batch['sent_1'].tolist())), axis=1)
-#   sts_encode2 = tf.nn.l2_normalize(embed(tf.constant(batch['sent_2'].tolist())), axis=1)
-#   cosine_similarities = tf.reduce_sum(tf.multiply(sts_encode1, sts_encode2), axis=1)
-#   clip_cosine_similarities = tf.clip_by_value(cosine_similarities, -1.0, 1.0)
-#   scores = 1.0 - tf.acos(clip_cosine_similarities) / math.pi
-#   """Returns the similarity scores"""
-#   return scores
-
-# dev_scores = sts_data['sim'].tolist()
-# scores = []
-# for batch in np.array_split(sts_data, 10):
-#   scores.extend(run_sts_benchmark(batch))
-
-# pearson_correlation = scipy.stats.pearsonr(scores, dev_scores)
-# print('Pearson correlation coefficient = {0}\np-value = {1}'.format(
-#     pearson_correlation[0], pearson_correlation[1]))
