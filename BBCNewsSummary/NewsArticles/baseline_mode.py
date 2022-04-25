@@ -112,8 +112,70 @@ class News:
   def get_similarity_centroid_score(self):
     pass
 
-  def get_keyword_frequency_score(self):
-    pass
+# def get_keyword_frequency_score(self):
+#    wordCountDic = {}
+#    keyWordFreq = {}
+#    for sentence in self.content:
+#      word_tokens = nltk.word_tokenize(sentence)
+#      for w in word_tokens:
+#        if w in wordCountDic:
+#          wordCountDic[w] += 1
+#        else:
+#          wordCountDic[w] = 1
+#    W = len(wordCountDic)
+#    for key in wordCountDic:
+#      if wordCountDic[key] > 3:
+#        keyWordFreq[key] = (wordCountDic[key]/W)*1.5
+#    return keyWordFreq
+#
+#def sbs_score(self):
+#  sentScores = []
+#  keyWordFreq = self.get_keyword_frequency_score()
+#  for sentence in self.content:
+#    score = 0
+#    sent_len = len(sentence)
+#    word_tokens = nltk.word_tokenize(sentence)
+#    for w in word_tokens:
+#      if w in keyWordFreq:
+#        score += keyWordFreq[w]
+#    sentScores.append(score*(1/sent_len))
+#  return sentScores
+#
+#
+#def dbs_score(self):
+#  K = 0
+#  keyWordFreq = self.get_keyword_frequency_score()
+#  sent_scores = []
+#  for sentence in self.content:
+#    word_tokens = nltk.word_tokenize(sentence)
+#    keywordIndexes = []
+#    for w in range(len(word_tokens)):
+#      if word_tokens[w] in keyWordFreq:
+#        K += 1
+#        keywordIndexes.append(w)
+#    m = 1/(K*(K+1))
+#    score = 0
+#    for i in range(1,len(keywordIndexes)):
+#      index1 = keywordIndexes[i]
+#      index0 = keywordIndexes[i-1]
+#      dist = index1 - index0
+#      word0 = word_tokens[index0]
+#      word1 = word_tokens[index1]
+#      score += (keyWordFreq[word0] * keyWordFreq[word1])/ (dist**2)
+#    sent_scores.append(m*score)
+#  return sent_scores
+#
+#def keyWordFreqScore(self):
+#  sent_scores = []
+#  dbs = self.dbs_score()
+#  sbs = self.sbs_score()
+#  if (len(dbs) != len(sbs)):
+#    print("ERROR FIX ")
+#  for i in range(len(dbs)):
+#    sent_scores.append( (dbs[i] + sbs[i])/20.0 )
+#  return sent_scores
+    
+
 
 # Andy is a good Chinese Wow Boy.
 
