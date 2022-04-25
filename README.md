@@ -41,3 +41,7 @@ Pick the top K sentences. K = #sentences in sample summary
 Recover the original order as every sentence was in the original article
 
 ### Evaluation (4)
+
+
+### reference paper link
+https://link.springer.com/chapter/10.1007/978-981-33-4893-6_20

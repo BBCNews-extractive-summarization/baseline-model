@@ -75,13 +75,14 @@ class News:
           self.content.append(self.title)
         else:
           self.content.append(Sentences(removeStopwordsTitle(sentences[i-1]), i, embedding, para_order[i], sentences[i-1]))
-    # caluclate the sub-part and sum of sentence score
+    # calculate the sub-part and sum of sentence score
     self.title_method()
     self.location_method()
     self.get_sentence_length_score()
     self.get_numerical_token_score()
     self.get_proper_noun_score()
     # self.reduce_frequency_helper(sentences_embedding)
+
     self.populate_sentence_score()
 
   def get_numerical_token_score(self):
@@ -286,11 +287,11 @@ def input_documents():
         #end
         sentences = sent_text
         # create News object using current news article
+
         news = News(categories[i], title, sentences,para_order, path)
         # print(news.location_method())
         news_of_one_category.append(news)
-        # print(news)
-        break
+
     category_news[categories[i]] = news_of_one_category
   return category_news
   
@@ -299,4 +300,3 @@ def main():
   generate_summaries(news)
 
 main()
-
