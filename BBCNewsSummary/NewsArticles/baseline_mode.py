@@ -5,6 +5,7 @@ from lib2to3.pgen2 import tokenize
 from absl import logging
 import tensorflow as tf
 import tensorflow_hub as hub
+from collections import Counter
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -16,6 +17,7 @@ import nltk
 from sklearn.cluster import KMeans
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+import math
 nltk.download('punkt')
 nltk.download('stopwords')
 nltk.download('wordnet')
@@ -29,10 +31,11 @@ model = hub.load(module_url)
 print ("module %s loaded" % module_url)
 
 class Sentences:
-      def __init__(self, content, id, sentence_embedding, para_order):
+      def __init__(self, content, id, sentence_embedding, para_order, content_original):
             self.id = id
             self.content = content
             self.sentence_embedding = sentence_embedding
+            self.content_original = content_original
 
             # the location of the sentence in the article
             self.para_order = para_order
@@ -53,11 +56,12 @@ class Sentences:
       # print instance for debugging purpose
       def __repr__(self):
             # !!! for now just show the first three sentence embedding for the purpose of reduce the computing power used
-            return "id: {} content: {} sentence_embedding: {}".format(self.id, self.content, self.sentence_embedding[:3]) + "\ntitle: {}, location:{}, sentence length:{}, numerical_token:{}, proper_noun:{}, similarity_centroid:{}, keyword_frequency:{}, sentence score:{}".format(self.title_method_score, self.title_method_score, self.sentence_length_score, self.numerical_token_score, self.proper_noun_score, self.similarity_centroid, self.keyword_frequency, self.sentence_score)
+            return "id: {} content: {} sentence_embedding: {}".format(self.id, self.content, self.sentence_embedding[:3]) + "\ntitle: {}, location:{}, sentence length:{}, numerical_token:{}, proper_noun:{}, similarity_centroid:{}, keyword_frequency:{}, kmeans:{}, sentence score:{}".format(self.title_method_score, self.title_method_score, self.sentence_length_score, self.numerical_token_score, self.proper_noun_score, self.similarity_centroid, self.keyword_frequency, self.reduce_frequency_score ,self.sentence_score)
 
 
 class News:
-  def __init__(self, category = None, title = None, sentences = None, para_order = None):
+  def __init__(self, category = None, title = None, sentences = None, para_order = None, path = None):
+    self.path = path
     self.category = category
     self.sentences = sentences
     self.para_order = para_order
@@ -67,16 +71,18 @@ class News:
     sentences_embedding = News.populate_sentence_embedding(title, sentences)
     for i, embedding in enumerate(sentences_embedding):
         if (i == 0):
-          self.title = Sentences(title, i, embedding, 1)
+          self.title = Sentences(removeStopwordsTitle(title), i, embedding, 1, title)
           self.content.append(self.title)
         else:
-          self.content.append(Sentences(sentences[i-1], i, embedding, para_order[i]))
-    # caluclate the sub-part and sum of sentence score
+          self.content.append(Sentences(removeStopwordsTitle(sentences[i-1]), i, embedding, para_order[i], sentences[i-1]))
+    # calculate the sub-part and sum of sentence score
     self.title_method()
     self.location_method()
     self.get_sentence_length_score()
     self.get_numerical_token_score()
     self.get_proper_noun_score()
+    # self.reduce_frequency_helper(sentences_embedding)
+
     self.populate_sentence_score()
 
   def get_numerical_token_score(self):
@@ -85,8 +91,24 @@ class News:
         num_numerical_token = len(list(filter(lambda x:x.isdigit(), words_in_sentence)))
         sentence.numerical_token_score = num_numerical_token/len(words_in_sentence)
 
-  # def reduce_frequency(num_cluster, X):
-  #   kmeans = KMeans(n_clusters=num_cluster, random_state=0).fit_predict(X)
+
+  def reduce_frequency_helper(self, sentences_embedding):
+    # k to be decided
+    k = int(0.4 * (len(self.content)-1))
+    # get all the sentence embedding except for the title in the news article
+    X = sentences_embedding[1:]
+    labels = News.get_reduce_frequency_score(k, X)
+    freq_count = Counter(labels)
+    for i in range(len(self.content)):
+      if i == 0:
+        self.content[i].reduce_frequency_score = 1
+      else:
+        self.content[i].reduce_frequency_score = freq_count[labels[i-1]]/len(labels)
+
+  
+  def get_reduce_frequency_score(num_cluster, X):
+    kmeans = KMeans(n_clusters=num_cluster, random_state=0).fit(X)
+    return kmeans.labels_
 
   def get_similarity_centroid_score(self):
     pass
@@ -161,6 +183,26 @@ class News:
   def __repr__(self):
         return "category: {} title: {} sentences: {} sentence_embedding: {}".format(self.category, self.title, self.sentences, self.content)
 
+def generate_summaries(categories_news):
+  for category in categories_news:
+    for i in range(len(categories_news[category])):
+      news_article = categories_news[category][i]
+      sentences = news_article.content[1:]
+      # rank the sentence based on the sentence score
+      sentences.sort(key = lambda x : x.sentence_score, reverse=True)
+      topk = sentences[:(math.floor(len(sentences)*0.4) + 1)]
+      topk.sort(key=lambda x: x.id)
+      summary = topk
+      file_name = (news_article.path).split("/")
+      file_name[6] = "Summaries_Baseline"
+      file_name[-1] = format(i+1, "03d") + ".txt"
+      file_name_processed = ("/").join(file_name)
+      with open(file_name_processed, "w") as file:
+        for s in [sentence.content_original for sentence in summary]:
+          file.write(s)
+          file.write(" ")
+    
+
 def embed(input):
   return model(input) 
 
@@ -233,24 +275,28 @@ def input_documents():
         if ("\n\n" in sent_text[0]):
           title_with_first_sentence = sent_text[0].split("\n\n")
           # remove the stop words in the title
-          title = removeStopwordsTitle(title_with_first_sentence[0])
+          title = title_with_first_sentence[0]
           # make sure sent_text only contains text sentences (no title)
           sent_text[0] = title_with_first_sentence[1]
         else:
-          title = removeStopwordsTitle(sent_text[0])
+          title = sent_text[0]
           # make sure sent_text only contains text sentences (no title)
           sent_text.pop(0)
         #to remove stopwords from an array of sentences 
-        sent_text = removeStopwords(sent_text)
+        sent_text = sent_text
         #end
         sentences = sent_text
         # create News object using current news article
-        news = News(categories[i], title, sentences,para_order)
+
+        news = News(categories[i], title, sentences,para_order, path)
+        # print(news.location_method())
         news_of_one_category.append(news)
+
     category_news[categories[i]] = news_of_one_category
   return category_news
   
 def main():
-  input_documents()
+  news = input_documents()
+  generate_summaries(news)
 
 main()
