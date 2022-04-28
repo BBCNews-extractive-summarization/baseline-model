@@ -20,6 +20,7 @@ from sklearn.cluster import KMeans
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import math
+import random
 nltk.download('punkt')
 nltk.download('stopwords')
 nltk.download('wordnet')
@@ -157,6 +158,8 @@ class News:
       for w in word_tokens:
         if w in keyWordFreq:
           score += keyWordFreq[w]
+      if (sent_len == 0):
+        sent_len = 1
       sentScores.append(score*(1/sent_len))
     return sentScores
 
@@ -199,8 +202,6 @@ class News:
       self.content[i].keyword_frequency = score
       sent_scores.append(score)
     return sent_scores
-
-# Andy is a good Chinese Wow Boy.
 
   def get_proper_noun_score(self):
     for sentence in self.content:
@@ -267,7 +268,7 @@ class News:
   def __repr__(self):
         return "category: {} title: {} sentences: {} sentence_embedding: {}".format(self.category, self.title, self.sentences, self.content)
 
-def generate_summaries(categories_news):
+def generate_summaries(categories_news, stage):
   for category in categories_news:
     for i in range(len(categories_news[category])):
       news_article = categories_news[category][i]
@@ -278,14 +279,20 @@ def generate_summaries(categories_news):
       topk.sort(key=lambda x: x.id)
       summary = topk
       file_name = (news_article.path).split("/")
-      file_name[6] = "Summaries_Baseline"
-      file_name[-1] = format(i+1, "03d") + ".txt"
+      if (stage == 0):
+        file_name[6] = "Summaries_Baseline_Training_Development"
+      elif (stage == 1):
+        file_name[6] = "Summaries_Baseline"
+      else:
+        raise ValueError('stage value incorrect')
+      # file_name[-1] = format(i+1, "03d") + ".txt"
+      file_name[-1] = news_article.path.split("/")[-1]
       file_name_processed = ("/").join(file_name)
+      # print(file_name_processed)
       with open(file_name_processed, "w") as file:
         for s in [sentence.content_original for sentence in summary]:
           file.write(s)
           file.write(" ")
-    
 
 def embed(input):
   return model(input) 
@@ -335,7 +342,7 @@ def paraOrder(sentences):
   return orders
 
 # read in the document
-def input_documents():
+def input_documents(stage):
   category_paths, categories = process_dirs()
   # print("categories: "  + str(categories))
   category_news = {category:[] for category in categories}
@@ -345,13 +352,38 @@ def input_documents():
     news_article_name_inorder = os.listdir(category_paths[i])
     # get the ordered news article file names list
     news_article_name_inorder = sorted(news_article_name_inorder, key=lambda x : int(x.split(".")[0]))
+
+    random.seed(0)
+    test = sorted(random.sample(news_article_name_inorder, 50))
+    training_development = sorted(list(set(test) ^ set(news_article_name_inorder)))
+
+    print(test)
+    print()
+    print(training_development)
+
+
+
+    # training_length = len(news_article_name_inorder) - 50
+    # # develop_length = (int)(0.2*len(news_article_name_inorder))
+    # training_development = news_article_name_inorder[:training_length]
+    # test = news_article_name_inorder[training_length:]
+
+    # # test = news_article_name_inorder[(training_length + develop_length):]
+    dataset = None
+    if stage == 1:
+      dataset = training_development
+    elif stage == 0:
+      dataset = test
+    else:
+      raise ValueError('stage value incorrect')
+
+
     # go through each news article in the category and create a list of news object for each category
     news_of_one_category = []
-    for news_article in news_article_name_inorder:
+    for news_article in dataset:
       path = category_paths[i] + "/" + news_article
       # print(path)
       with open(path, 'r', errors='ignore') as file:
-        # try:
         lines = file.read()
         para_order = paraOrder(lines)
         sent_text = nltk.sent_tokenize(lines)
@@ -367,7 +399,7 @@ def input_documents():
           # make sure sent_text only contains text sentences (no title)
           sent_text.pop(0)
         #to remove stopwords from an array of sentences 
-        sent_text = sent_text
+        # sent_text = sent_text
         #end
         sentences = sent_text
         # create News object using current news article
@@ -378,8 +410,9 @@ def input_documents():
   return category_news
   
 def main():
-  news = input_documents()
-  # generate_summaries(news)
+  news= input_documents(1)
+  generate_summaries(news, 1)
+  # news, training, development= input_documents(0)
+  # generate_summaries(news, 0, training, development)
 
 main()
-
