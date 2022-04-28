@@ -161,11 +161,11 @@ class News:
     return sentScores
 
   def dbs_score(self):
-    K = 0
     keyWordFreq = self.get_keyword_frequency_score()
     # print(keyWordFreq)
     sent_scores = []
     for sentence in self.content:
+      K = 0
       sentence = sentence.content
       word_tokens = nltk.word_tokenize(sentence)
       keywordIndexes = []
@@ -173,16 +173,19 @@ class News:
         if word_tokens[w] in keyWordFreq:
           K += 1
           keywordIndexes.append(w)
-      m = 1/(K*(K+1))
-      score = 0
-      for i in range(1,len(keywordIndexes)):
-        index1 = keywordIndexes[i]
-        index0 = keywordIndexes[i-1]
-        dist = index1 - index0
-        word0 = word_tokens[index0]
-        word1 = word_tokens[index1]
-        score += (keyWordFreq[word0] * keyWordFreq[word1])/ (dist**2)
-      sent_scores.append(m*score)
+      if (K == 0):
+        sent_scores.append(0)
+      else:
+          m = 1/(K*(K+1))
+          score = 0
+          for i in range(1,len(keywordIndexes)):
+            index1 = keywordIndexes[i]
+            index0 = keywordIndexes[i-1]
+            dist = index1 - index0
+            word0 = word_tokens[index0]
+            word1 = word_tokens[index1]
+            score += (keyWordFreq[word0] * keyWordFreq[word1])/ (dist**2)
+          sent_scores.append(m*score)
     return sent_scores
 
   def keyWordFreqScore(self):
