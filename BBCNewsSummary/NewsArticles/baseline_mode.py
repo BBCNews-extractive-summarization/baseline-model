@@ -27,8 +27,8 @@ nltk.download('averaged_perceptron_tagger')
 
 # Create WordNetLemmatizer object
 wnl = WordNetLemmatizer()
-# module_url = "https://tfhub.dev/google/universal-sentence-encoder/4" #@param ["https://tfhub.dev/google/universal-sentence-encoder/4", "https://tfhub.dev/google/universal-sentence-encoder-large/5"]
-module_url = "https://tfhub.dev/google/universal-sentence-encoder-large/5"
+os.environ['TFHUB_CACHE_DIR'] = 'tf/tf_cache'
+module_url = "https://tfhub.dev/google/universal-sentence-encoder/4" #@param ["https://tfhub.dev/google/universal-sentence-encoder/4", "https://tfhub.dev/google/universal-sentence-encoder-large/5"]
 model = hub.load(module_url)
 print ("module %s loaded" % module_url)
 
@@ -84,9 +84,9 @@ class News:
     self.get_numerical_token_score()
     self.get_proper_noun_score()
     # self.reduce_frequency_helper(sentences_embedding)
-    self.populate_sentence_score()
     self.keyWordFreqScore()
     self.get_similarity_centroid_score()
+    self.populate_sentence_score()
 
   def get_numerical_token_score(self):
     for sentence in self.content:
@@ -228,7 +228,7 @@ class News:
   def populate_sentence_score(self):
     for sentence in self.content:
         try:
-          sentence.sentence_score = sentence.location_method_score * 0.3 + sentence.title_method_score * 0.5 + sentence.sentence_length_score * 0.05 + sentence.numerical_token_score * 0.05 + sentence.proper_noun_score * 0.1 + sentence.keyword_frequency * .05 + sentence.similarity_centroid *.05
+          sentence.sentence_score = ((sentence.title_method_score + sentence.keyword_frequency) * 4 + (sentence.sentence_length_score + sentence.location_method_score + sentence.numerical_token_score) * 3 + (sentence.proper_noun_score + sentence.similarity_centroid) * 1)/7
         except TypeError:
           print(sentence)
         
@@ -371,10 +371,7 @@ def input_documents():
         news = News(categories[i], title, sentences,para_order, path)
         # print(news.get_similarity_centroid_score())
         news_of_one_category.append(news)
-        break
-
     category_news[categories[i]] = news_of_one_category
-    break
   return category_news
   
 def main():
