@@ -232,7 +232,7 @@ class News:
   def populate_sentence_score(self):
     for sentence in self.content:
         try:
-          sentence.sentence_score = ((sentence.title_method_score + sentence.keyword_frequency) * 4 + (sentence.sentence_length_score + sentence.location_method_score + sentence.numerical_token_score) * 3 + (sentence.proper_noun_score + sentence.similarity_centroid) * 1)/7
+          sentence.sentence_score = ((sentence.title_method_score + sentence.keyword_frequency) * 4 + (sentence.location_method_score + sentence.similarity_centroid) * 3 + (sentence.proper_noun_score + sentence.sentence_length_score + sentence.numerical_token_score) * 1)/7
         except TypeError:
           print(sentence)
         
@@ -410,8 +410,8 @@ def input_documents(stage):
   return category_news
   
 def main():
-  news= input_documents(1)
-  generate_summaries(news, 1)
+  news= input_documents(0)
+  generate_summaries(news, 0)
   # news, training, development= input_documents(0)
   # generate_summaries(news, 0, training, development)
 
